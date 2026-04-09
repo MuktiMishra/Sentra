@@ -25,18 +25,16 @@ function formatUptime(seconds) {
   return `${hrs}h ${mins}m ${secs}s`;
 }
 
-function getSystemStatus(timestamp, now) {
-  if (!timestamp) return "offline";
+function getSystemStatus(lastSeenAt, now) {
+  if (!lastSeenAt) return "offline";
 
-  const metricTime = new Date(timestamp).getTime();
-  const diffInSeconds = (now - metricTime) / 1000;
-
+  const diffInSeconds = (now - lastSeenAt) / 1000;
   return diffInSeconds <= 15 ? "online" : "offline";
 }
 
-function formatLastUpdated(timestamp) {
-  if (!timestamp) return "--";
-  return new Date(timestamp).toLocaleString();
+function formatLastUpdated(lastSeenAt) {
+  if (!lastSeenAt) return "--";
+  return new Date(lastSeenAt).toLocaleString();
 }
 
 function App() {
@@ -45,8 +43,9 @@ function App() {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [lastSeenAt, setLastSeenAt] = useState(null);
   const [now, setNow] = useState(Date.now());
-  const systemStatus = getSystemStatus(latest?.timestamp, now);
+  const systemStatus = getSystemStatus(lastSeenAt, now);
 
   const fetchMetrics = async () => {
     try {
@@ -62,6 +61,7 @@ function App() {
       setHistory(historyData);
 
       setAlerts(alertsRes.data.data || []);
+      setLastSeenAt(Date.now());
       setError("");
     } catch (err) {
       setError(err.response?.data?.message || "Failed to fetch dashboard data");
@@ -91,6 +91,7 @@ function App() {
     const newMetric = payload.metric;
 
     setLatest(newMetric);
+    setLastSeenAt(Date.now());
 
     setHistory((prev) => {
       const updated = [...prev, newMetric];
@@ -136,7 +137,7 @@ function App() {
   <div>
     <h1>System Monitoring Dashboard</h1>
     <p>Monitoring: {SYSTEM_ID}</p>
-    <p>Last Updated: {formatLastUpdated(latest?.timestamp)}</p>
+    <p>Last Updated: {formatLastUpdated(lastSeenAt)}</p>
   </div>
 
   <div className={`status-badge ${systemStatus}`}>
