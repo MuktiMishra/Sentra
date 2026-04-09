@@ -41,19 +41,23 @@ function App() {
   const [latest, setLatest] = useState(null);
   const [history, setHistory] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const [containerMetrics, setContainerMetrics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [lastSeenAt, setLastSeenAt] = useState(null);
   const [now, setNow] = useState(Date.now());
+  const [lastSeenAt, setLastSeenAt] = useState(null);
+
   const systemStatus = getSystemStatus(lastSeenAt, now);
 
   const fetchMetrics = async () => {
     try {
-      const [latestRes, historyRes, alertsRes] = await Promise.all([
-        axios.get(`${API_BASE}/latest?systemId=${SYSTEM_ID}`),
-        axios.get(`${API_BASE}/history?systemId=${SYSTEM_ID}`),
-        axios.get(`${API_BASE}/alerts?systemId=${SYSTEM_ID}`),
-      ]);
+      const [latestRes, historyRes, alertsRes, containersRes] =
+        await Promise.all([
+          axios.get(`${API_BASE}/latest?systemId=${SYSTEM_ID}`),
+          axios.get(`${API_BASE}/history?systemId=${SYSTEM_ID}`),
+          axios.get(`${API_BASE}/alerts?systemId=${SYSTEM_ID}`),
+          axios.get(`${API_BASE}/containers/latest?systemId=${SYSTEM_ID}`),
+        ]);
 
       setLatest(latestRes.data.data);
 
@@ -61,6 +65,7 @@ function App() {
       setHistory(historyData);
 
       setAlerts(alertsRes.data.data || []);
+      setContainerMetrics(containersRes.data.data || []);
       setLastSeenAt(Date.now());
       setError("");
     } catch (err) {
@@ -69,51 +74,60 @@ function App() {
       setLoading(false);
     }
   };
-  useEffect(() => {
-  const timer = setInterval(() => {
-    setNow(Date.now());
-  }, 1000);
 
-  return () => clearInterval(timer);
-}, []);
-  
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     fetchMetrics();
-    const interval = setInterval(fetchMetrics, 30000);
+    const interval = setInterval(fetchMetrics, 15000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-  const handleNewMetric = async (payload) => {
-    if (payload.systemId !== SYSTEM_ID) return;
+    const handleNewMetric = async (payload) => {
+      if (payload.systemId !== SYSTEM_ID) return;
 
-    const newMetric = payload.metric;
+      const newMetric = payload.metric;
 
-    setLatest(newMetric);
-    setLastSeenAt(Date.now());
+      setLatest(newMetric);
+      setLastSeenAt(Date.now());
 
-    setHistory((prev) => {
-      const updated = [...prev, newMetric];
-      return updated.slice(-50);
-    });
+      setHistory((prev) => {
+        const updated = [...prev, newMetric];
+        return updated.slice(-50);
+      });
 
-    try {
-      const alertsRes = await axios.get(
-        `${API_BASE}/alerts?systemId=${SYSTEM_ID}`
-      );
-      setAlerts(alertsRes.data.data || []);
-    } catch (err) {
-      console.error("Failed to refresh alerts:", err.message);
-    }
-  };
+      try {
+        const alertsRes = await axios.get(
+          `${API_BASE}/alerts?systemId=${SYSTEM_ID}`
+        );
+        setAlerts(alertsRes.data.data || []);
+      } catch (err) {
+        console.error("Failed to refresh alerts:", err.message);
+      }
 
-  socket.on("metric:new", handleNewMetric);
+      try {
+        const containersRes = await axios.get(
+          `${API_BASE}/containers/latest?systemId=${SYSTEM_ID}`
+        );
+        setContainerMetrics(containersRes.data.data || []);
+      } catch (err) {
+        console.error("Failed to refresh container metrics:", err.message);
+      }
+    };
 
-  return () => {
-    socket.off("metric:new", handleNewMetric);
-  };
-}, []);
+    socket.on("metric:new", handleNewMetric);
+
+    return () => {
+      socket.off("metric:new", handleNewMetric);
+    };
+  }, []);
 
   const chartData = useMemo(() => {
     return history.map((item) => ({
@@ -134,16 +148,16 @@ function App() {
   return (
     <div className="page">
       <div className="header">
-  <div>
-    <h1>System Monitoring Dashboard</h1>
-    <p>Monitoring: {SYSTEM_ID}</p>
-    <p>Last Updated: {formatLastUpdated(lastSeenAt)}</p>
-  </div>
+        <div>
+          <h1>System Monitoring Dashboard</h1>
+          <p>Monitoring: {SYSTEM_ID}</p>
+          <p>Last Updated: {formatLastUpdated(lastSeenAt)}</p>
+        </div>
 
-  <div className={`status-badge ${systemStatus}`}>
-    {systemStatus.toUpperCase()}
-  </div>
-</div>
+        <div className={`status-badge ${systemStatus}`}>
+          {systemStatus.toUpperCase()}
+        </div>
+      </div>
 
       {error && <div className="error-box">{error}</div>}
 
@@ -186,6 +200,47 @@ function App() {
                     Resolved: {new Date(alert.resolved_at).toLocaleString()}
                   </div>
                 )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="containers-section">
+        <h2>Containers</h2>
+
+        {containerMetrics.length === 0 ? (
+          <div className="container-empty">No running containers found</div>
+        ) : (
+          <div className="containers-grid">
+            {containerMetrics.map((container) => (
+              <div className="container-card" key={container.container_id}>
+                <div className="container-card-top">
+                  <h3>{container.name}</h3>
+                  <span className={`container-status ${container.status}`}>
+                    {container.status}
+                  </span>
+                </div>
+
+                <p className="container-image">
+                  Image: {container.image_name || "Unknown"}
+                </p>
+
+                <div className="container-metrics">
+                  <div>
+                    <span>CPU</span>
+                    <strong>{container.cpu}%</strong>
+                  </div>
+
+                  <div>
+                    <span>Memory</span>
+                    <strong>{container.memory}%</strong>
+                  </div>
+                </div>
+
+                <p className="container-time">
+                  Updated: {new Date(container.timestamp).toLocaleString()}
+                </p>
               </div>
             ))}
           </div>
