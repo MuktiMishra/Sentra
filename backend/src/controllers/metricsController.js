@@ -1,6 +1,132 @@
 import pool from "../config/db.js";
 import { getIO } from "../socket.js";
 
+export const createContainerMetrics = async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const { systemId, containers, timestamp } = req.body;
+
+    if (!systemId || !Array.isArray(containers)) {
+      return res.status(400).json({
+        success: false,
+        message: "systemId and containers array are required",
+      });
+    }
+
+    await client.query("BEGIN");
+
+    for (const container of containers) {
+      const {
+        containerId,
+        name,
+        imageName,
+        cpu,
+        memory,
+        status,
+      } = container;
+
+      if (
+        !containerId ||
+        !name ||
+        cpu === undefined ||
+        memory === undefined
+      ) {
+        continue;
+      }
+
+      const existingContainer = await client.query(
+        `SELECT container_id FROM containers WHERE container_id = $1`,
+        [containerId]
+      );
+
+      if (existingContainer.rows.length === 0) {
+        await client.query(
+          `INSERT INTO containers (container_id, system_id, name, image_name)
+           VALUES ($1, $2, $3, $4)`,
+          [containerId, systemId, name, imageName || null]
+        );
+      }
+
+      await client.query(
+        `INSERT INTO container_metrics (container_id, cpu, memory, status, timestamp)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          containerId,
+          cpu,
+          memory,
+          status || "unknown",
+          timestamp || new Date(),
+        ]
+      );
+    }
+
+    await client.query("COMMIT");
+
+    res.status(201).json({
+      success: true,
+      message: "Container metrics stored successfully",
+    });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    res.status(500).json({
+      success: false,
+      message: "Failed to store container metrics",
+      error: error.message,
+    });
+  } finally {
+    client.release();
+  }
+};
+
+export const getLatestContainerMetrics = async (req, res) => {
+  try {
+    const { systemId } = req.query;
+
+    if (!systemId) {
+      return res.status(400).json({
+        success: false,
+        message: "systemId is required",
+      });
+    }
+
+    const query = `
+      SELECT
+        c.container_id,
+        c.name,
+        c.image_name,
+        cm.cpu,
+        cm.memory,
+        cm.status,
+        cm.timestamp
+      FROM containers c
+      JOIN LATERAL (
+        SELECT cpu, memory, status, timestamp
+        FROM container_metrics
+        WHERE container_id = c.container_id
+        ORDER BY timestamp DESC
+        LIMIT 1
+      ) cm ON true
+      WHERE c.system_id = $1
+      ORDER BY c.name ASC
+    `;
+
+    const result = await pool.query(query, [systemId]);
+
+    res.status(200).json({
+      success: true,
+      count: result.rows.length,
+      data: result.rows,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch latest container metrics",
+      error: error.message,
+    });
+  }
+};
+
 const handleAlert = async ({
   client,
   systemId,
