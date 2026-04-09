@@ -71,3 +71,101 @@ body {
     grid-template-columns: 1fr;
   }
 }
+.alerts-section {
+  margin-bottom: 24px;
+}
+
+.alerts-section h2 {
+  margin-bottom: 12px;
+  font-size: 22px;
+}
+
+.alert-empty {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 16px;
+  padding: 16px;
+  color: #94a3b8;
+}
+
+.alerts-list {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.alert-card {
+  border-radius: 16px;
+  padding: 16px;
+  border: 1px solid;
+}
+
+.alert-card.active {
+  background: #450a0a;
+  border-color: #dc2626;
+}
+
+.alert-card.resolved {
+  background: #052e16;
+  border-color: #16a34a;
+}
+
+.alert-top {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-weight: bold;
+}
+
+.alert-type {
+  color: #f8fafc;
+}
+
+.alert-status {
+  color: #cbd5e1;
+}
+
+.alert-message {
+  margin-bottom: 10px;
+}
+
+.alert-meta {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 8px;
+  color: #cbd5e1;
+  flex-wrap: wrap;
+}
+
+.alert-time {
+  color: #94a3b8;
+  font-size: 14px;
+  margin-top: 4px;
+}
+.header {
+  margin-bottom: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.status-badge {
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-weight: bold;
+  font-size: 14px;
+  border: 1px solid;
+}
+
+.status-badge.online {
+  background: #052e16;
+  color: #bbf7d0;
+  border-color: #16a34a;
+}
+
+.status-badge.offline {
+  background: #450a0a;
+  color: #fecaca;
+  border-color: #dc2626;
+}
