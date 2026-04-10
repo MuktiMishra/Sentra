@@ -13,8 +13,6 @@ import {
 import "./index.css";
 
 const socket = io("http://localhost:8000");
-
-const SYSTEM_ID = "machine-001";
 const API_BASE = "http://localhost:8000/api/metrics";
 
 function formatUptime(seconds) {
@@ -38,10 +36,14 @@ function formatLastUpdated(lastSeenAt) {
 }
 
 function App() {
+  const [systems, setSystems] = useState([]);
+  const [selectedSystemId, setSelectedSystemId] = useState("");
+
   const [latest, setLatest] = useState(null);
   const [history, setHistory] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [containerMetrics, setContainerMetrics] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [now, setNow] = useState(Date.now());
@@ -49,14 +51,34 @@ function App() {
 
   const systemStatus = getSystemStatus(lastSeenAt, now);
 
+  const fetchSystems = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/systems`);
+      const systemsData = res.data.data || [];
+
+      setSystems(systemsData);
+
+      if (!selectedSystemId && systemsData.length > 0) {
+        setSelectedSystemId(systemsData[0].system_id);
+      }
+    } catch (err) {
+      console.error("Failed to fetch systems:", err.message);
+      setError("Failed to fetch systems");
+    }
+  };
+
   const fetchMetrics = async () => {
+    if (!selectedSystemId) return;
+
     try {
       const [latestRes, historyRes, alertsRes, containersRes] =
         await Promise.all([
-          axios.get(`${API_BASE}/latest?systemId=${SYSTEM_ID}`),
-          axios.get(`${API_BASE}/history?systemId=${SYSTEM_ID}`),
-          axios.get(`${API_BASE}/alerts?systemId=${SYSTEM_ID}`),
-          axios.get(`${API_BASE}/containers/latest?systemId=${SYSTEM_ID}`),
+          axios.get(`${API_BASE}/latest?systemId=${selectedSystemId}`),
+          axios.get(`${API_BASE}/history?systemId=${selectedSystemId}`),
+          axios.get(`${API_BASE}/alerts?systemId=${selectedSystemId}`),
+          axios.get(
+            `${API_BASE}/containers/latest?systemId=${selectedSystemId}`
+          ),
         ]);
 
       setLatest(latestRes.data.data);
@@ -76,6 +98,10 @@ function App() {
   };
 
   useEffect(() => {
+    fetchSystems();
+  }, []);
+
+  useEffect(() => {
     const timer = setInterval(() => {
       setNow(Date.now());
     }, 1000);
@@ -84,14 +110,27 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!selectedSystemId) return;
+
     fetchMetrics();
     const interval = setInterval(fetchMetrics, 15000);
+
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedSystemId]);
 
   useEffect(() => {
+    setLatest(null);
+    setHistory([]);
+    setAlerts([]);
+    setContainerMetrics([]);
+    setLastSeenAt(null);
+  }, [selectedSystemId]);
+
+  useEffect(() => {
+    if (!selectedSystemId) return;
+
     const handleNewMetric = async (payload) => {
-      if (payload.systemId !== SYSTEM_ID) return;
+      if (payload.systemId !== selectedSystemId) return;
 
       const newMetric = payload.metric;
 
@@ -105,7 +144,7 @@ function App() {
 
       try {
         const alertsRes = await axios.get(
-          `${API_BASE}/alerts?systemId=${SYSTEM_ID}`
+          `${API_BASE}/alerts?systemId=${selectedSystemId}`
         );
         setAlerts(alertsRes.data.data || []);
       } catch (err) {
@@ -114,7 +153,7 @@ function App() {
 
       try {
         const containersRes = await axios.get(
-          `${API_BASE}/containers/latest?systemId=${SYSTEM_ID}`
+          `${API_BASE}/containers/latest?systemId=${selectedSystemId}`
         );
         setContainerMetrics(containersRes.data.data || []);
       } catch (err) {
@@ -127,7 +166,7 @@ function App() {
     return () => {
       socket.off("metric:new", handleNewMetric);
     };
-  }, []);
+  }, [selectedSystemId]);
 
   const chartData = useMemo(() => {
     return history.map((item) => ({
@@ -137,7 +176,7 @@ function App() {
     }));
   }, [history]);
 
-  if (loading) {
+  if (loading && !selectedSystemId) {
     return (
       <div className="page">
         <h2>Loading dashboard...</h2>
@@ -150,7 +189,23 @@ function App() {
       <div className="header">
         <div>
           <h1>System Monitoring Dashboard</h1>
-          <p>Monitoring: {SYSTEM_ID}</p>
+
+          <div className="system-selector">
+            <label htmlFor="systemSelect">System:</label>
+            <select
+              id="systemSelect"
+              value={selectedSystemId}
+              onChange={(e) => setSelectedSystemId(e.target.value)}
+            >
+              {systems.map((system) => (
+                <option key={system.system_id} value={system.system_id}>
+                  {system.hostname || system.system_id} ({system.system_id})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <p>Monitoring: {selectedSystemId || "--"}</p>
           <p>Last Updated: {formatLastUpdated(lastSeenAt)}</p>
         </div>
 

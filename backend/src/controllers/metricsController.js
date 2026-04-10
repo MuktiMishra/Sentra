@@ -1,6 +1,38 @@
 import pool from "../config/db.js";
 import { getIO } from "../socket.js";
 
+export const getSystems = async (req, res) => {
+  try {
+    const query = `
+      SELECT
+        s.system_id,
+        s.hostname,
+        s.os_name,
+        s.agent_version,
+        MAX(sm.timestamp) AS last_metric_at
+      FROM systems s
+      LEFT JOIN system_metrics sm
+        ON s.system_id = sm.system_id
+      GROUP BY s.system_id, s.hostname, s.os_name, s.agent_version
+      ORDER BY s.hostname ASC NULLS LAST, s.system_id ASC
+    `;
+
+    const result = await pool.query(query);
+
+    res.status(200).json({
+      success: true,
+      count: result.rows.length,
+      data: result.rows,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch systems",
+      error: error.message,
+    });
+  }
+};
+
 export const createContainerMetrics = async (req, res) => {
   const client = await pool.connect();
 
