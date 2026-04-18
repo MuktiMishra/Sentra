@@ -2,6 +2,7 @@
 
 **Sentra** is a small real-time observability and monitoring platform for **host systems** and **Docker containers**. It follows an **agent-based architecture** where each monitored machine runs a lightweight agent that collects metrics and sends them to a central backend. The backend stores data in PostgreSQL, pushes live updates through Socket.IO, and powers a React dashboard for monitoring multiple systems.
 
+
 ---
 
 ## Features
